@@ -1,0 +1,4 @@
+interface:
+  display_name: "fxskill 网站顾问"
+  short_description: "为建站新手提供规划、设计、服务器、支付、合规、增长与维护建议"
+  default_prompt: "使用 $fxskill 判断我当前最重要的网站问题，并给出简短、可靠的下一步建议，比如服务器、支付、备案或 SEO。"
