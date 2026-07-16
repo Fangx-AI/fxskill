@@ -164,6 +164,22 @@ USER_DECISION_PROFILES = (
     ("payment-platform-cn-services.md", "虎皮椒"),
     ("payment-platform-cn-services.md", "XorPay"),
 )
+PAYMENT_USER_ACCEPTANCE_CASE_IDS = tuple(f"P{index:02d}" for index in range(1, 21))
+PAYMENT_USER_ACCEPTANCE_TOPICS = (
+    "自然人",
+    "个体工商户",
+    "自动续费",
+    "H5",
+    "JSAPI",
+    "XorPay",
+    "虎皮椒",
+    "费用",
+    "到账",
+    "ICP",
+    "回调",
+    "退款",
+    "Vibe Coding",
+)
 
 
 class PaymentKnowledgeBaseTests(unittest.TestCase):
@@ -248,6 +264,45 @@ class PaymentKnowledgeBaseTests(unittest.TestCase):
         self.assertIn(expected, text)
         self.assertIn("运营主体、合同主体和资金路径只作为内部核验字段", text)
         self.assertIn("影响申请、收款、结算或售后追责", text)
+
+    def test_twenty_beginner_payment_answers_are_concrete_and_short(self):
+        path = ROOT / "tests/fxskill/payment-user-acceptance.md"
+        self.assertTrue(path.exists(), "missing payment user acceptance results")
+        text = path.read_text("utf-8")
+        matches = list(
+            re.finditer(
+                r"^## (?P<id>P\d{2}) .+?\n(?P<section>.*?)(?=^## P\d{2} |\Z)",
+                text,
+                re.MULTILINE | re.DOTALL,
+            )
+        )
+        self.assertEqual(PAYMENT_USER_ACCEPTANCE_CASE_IDS, tuple(match.group("id") for match in matches))
+
+        for topic in PAYMENT_USER_ACCEPTANCE_TOPICS:
+            self.assertIn(topic, text)
+
+        for match in matches:
+            case_id = match.group("id")
+            section = match.group("section")
+            answer_match = re.search(r"\*\*参考短答\*\*\s*\n\n```text\n(?P<answer>.*?)\n```", section, re.DOTALL)
+            self.assertIsNotNone(answer_match, f"{case_id} missing reference answer")
+            answer = answer_match.group("answer").strip()
+            self.assertTrue(answer.startswith("结论："), f"{case_id} must lead with a conclusion")
+            self.assertLessEqual(len(answer), 450, f"{case_id} answer is too long")
+            self.assertLessEqual(
+                len(re.findall(r"^\d+\. ", answer, re.MULTILINE)),
+                3,
+                f"{case_id} has more than three actions",
+            )
+            self.assertNotIn("请联系客服", answer, f"{case_id} falls back to customer-service language")
+            self.assertNotIn("合同主体", answer, f"{case_id} exposes an internal audit field")
+
+            status_match = re.search(r"^- 状态：(PASS|GAP)$", section, re.MULTILINE)
+            self.assertIsNotNone(status_match, f"{case_id} missing PASS/GAP status")
+            gap_match = re.search(r"^- 资料缺口：(.+)$", section, re.MULTILINE)
+            self.assertIsNotNone(gap_match, f"{case_id} missing gap assessment")
+            if status_match.group(1) == "GAP":
+                self.assertNotEqual("无", gap_match.group(1).strip(), f"{case_id} GAP needs a concrete gap")
 
     def test_domestic_scenario_action_parser_rejects_fourth_action(self):
         original_parser = self.parse_domestic_scenario_sections
