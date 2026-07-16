@@ -83,6 +83,13 @@ BASE_PROFILE = {
 }
 
 OPTIONAL_LABELS = (
+    "能不能申请",
+    "需要准备",
+    "怎么收费",
+    "多久能到账",
+    "会员和自动续费",
+    "接入难度",
+    "最容易踩的坑",
     "运营主体",
     "限制商品",
     "单次支付",
@@ -142,6 +149,21 @@ TASK_6_SCENARIO_MARKERS = (
     "R9 小报童不是网站支付 API",
     "R10 当前平台费用组成",
 )
+USER_DECISION_FIELDS = (
+    "能不能申请",
+    "需要准备",
+    "怎么收费",
+    "多久能到账",
+    "会员和自动续费",
+    "接入难度",
+    "最容易踩的坑",
+)
+USER_DECISION_PROFILES = (
+    ("payment-platform-cn-direct.md", "微信支付"),
+    ("payment-platform-cn-direct.md", "支付宝"),
+    ("payment-platform-cn-services.md", "虎皮椒"),
+    ("payment-platform-cn-services.md", "XorPay"),
+)
 
 
 class PaymentKnowledgeBaseTests(unittest.TestCase):
@@ -194,6 +216,38 @@ class PaymentKnowledgeBaseTests(unittest.TestCase):
         self.assertGreaterEqual(len(actions), 1, f"{heading} must keep at least one listed action")
         self.assertLessEqual(len(actions), 3, f"{heading} must keep at most three listed actions")
         return actions
+
+    def test_core_payment_profiles_put_user_decisions_before_audit_fields(self):
+        references = ROOT / "skills/fxskill/references"
+
+        for filename, platform in USER_DECISION_PROFILES:
+            text = (references / filename).read_text("utf-8")
+            match = re.search(
+                rf"^## {re.escape(platform)}\s*$\n(?P<section>.*?)(?=^## |\Z)",
+                text,
+                re.MULTILINE | re.DOTALL,
+            )
+            self.assertIsNotNone(match, f"missing profile for {platform}")
+            section = match.group("section")
+            audit_start = section.find("- 当前状态：")
+            self.assertGreaterEqual(audit_start, 0, f"{platform} missing audit profile")
+            decision_card = section[:audit_start]
+            self.assertIn("### 用户先看", decision_card, f"{platform} missing user decision card")
+
+            positions = []
+            for field in USER_DECISION_FIELDS:
+                marker = f"- {field}："
+                self.assertIn(marker, decision_card, f"{platform} missing `{field}`")
+                positions.append(decision_card.index(marker))
+            self.assertEqual(sorted(positions), positions, f"{platform} decision fields are out of order")
+
+    def test_payment_recipe_keeps_audit_identity_out_of_default_answers(self):
+        text = (ROOT / "skills/fxskill/SKILL.md").read_text("utf-8")
+
+        expected = "能不能申请 -> 需要准备 -> 怎么收费 -> 多久能到账 -> 会员和自动续费 -> 接入难度 -> 最容易踩的坑"
+        self.assertIn(expected, text)
+        self.assertIn("运营主体、合同主体和资金路径只作为内部核验字段", text)
+        self.assertIn("影响申请、收款、结算或售后追责", text)
 
     def test_domestic_scenario_action_parser_rejects_fourth_action(self):
         original_parser = self.parse_domestic_scenario_sections
@@ -303,7 +357,7 @@ class PaymentKnowledgeBaseTests(unittest.TestCase):
             "资料库深、回答浅",
             "先给一句明确结论",
             "再给 2-4 条真正影响选择的信息",
-            "优先费用、主体或类目条件、结算或最大未知",
+            "优先能否申请、所需材料、费用、到账、续费能力、接入难度或最大坑",
             "最后给最多三个按顺序的原子步骤",
             "不强制固定标题",
             "不默认输出完整成本卡或条件卡",
